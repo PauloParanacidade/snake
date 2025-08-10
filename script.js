@@ -5,11 +5,13 @@
 // ===== CONFIGURAÇÃO GLOBAL =====
 const GAME_CONFIG = {
   GRID_SIZES: {
-    small: { tiles: 15, name: 'Pequeno' },
+    small: { tiles: 8, name: 'Pequeno' },
     medium: { tiles: 20, name: 'Médio' },
-    large: { tiles: 25, name: 'Grande' }
+    large: { tiles: 30, name: 'Grande' }
   },
-  GAME_SPEED: 600,
+  BASE_SPEED: 400,
+  MIN_SPEED: 80,
+  MAX_LEVEL: 10,
   PARTICLE_COUNT: 10
 };
 
@@ -21,12 +23,15 @@ const gameState = {
   food: { x: 10, y: 10 },
   score: 0,
   currentGridSize: 'large',
-  tileCount: 25,
+  tileCount: 30,
+  currentSpeed: GAME_CONFIG.BASE_SPEED,
+  currentLevel: 1,
   
   isRunning: false,
   isGameOver: false,
   isPaused: false,
   wasRunningBeforeMenu: false,
+  isFromGameOver: false,
   
   lastFrameTime: 0,
   accumulator: 0,
@@ -66,8 +71,11 @@ const elements = {
   
   score: document.getElementById('score'),
   highScore: document.getElementById('highScore'),
+  speedLevel: document.getElementById('speedLevel'),
   finalScore: document.getElementById('finalScore'),
-  gameOver: document.getElementById('gameOver'),
+  gameOverModal: document.getElementById('gameOverModal'),
+  gameOverTitle: document.getElementById('gameOverTitle'),
+  recordInfo: document.getElementById('recordInfo'),
   
   startBtn: document.getElementById('startBtn'),
   pauseBtn: document.getElementById('pauseBtn'),
@@ -80,7 +88,9 @@ const elements = {
   
   highScoreSmall: document.getElementById('highScoreSmall'),
   highScoreMedium: document.getElementById('highScoreMedium'),
-  highScoreLarge: document.getElementById('highScoreLarge')
+  highScoreLarge: document.getElementById('highScoreLarge'),
+  
+  resumeFromOver: document.getElementById('resumeFromOver')
 };
 
 // ===== SISTEMA DE PONTUAÇÃO =====
@@ -99,6 +109,14 @@ const scoring = {
     this.current += points;
     elements.score.textContent = this.current.toString();
     
+    // Calcular nível baseado na pontuação
+    const newLevel = Math.min(GAME_CONFIG.MAX_LEVEL, Math.floor(this.current / 50) + 1);
+    if (newLevel !== gameState.currentLevel) {
+      gameState.currentLevel = newLevel;
+      gameState.currentSpeed = GAME_CONFIG.BASE_SPEED - (newLevel - 1) * ((GAME_CONFIG.BASE_SPEED - GAME_CONFIG.MIN_SPEED) / (GAME_CONFIG.MAX_LEVEL - 1));
+      elements.speedLevel.textContent = `${newLevel} de ${GAME_CONFIG.MAX_LEVEL}`;
+    }
+    
     const currentHigh = this.getHighScore(gameState.currentGridSize);
     if (this.current > currentHigh) {
       this.setHighScore(gameState.currentGridSize, this.current);
@@ -111,7 +129,10 @@ const scoring = {
   
   reset() {
     this.current = 0;
+    gameState.currentLevel = 1;
+    gameState.currentSpeed = GAME_CONFIG.BASE_SPEED;
     elements.score.textContent = '0';
+    elements.speedLevel.textContent = '1 de ' + GAME_CONFIG.MAX_LEVEL;
   },
   
   init() {
@@ -209,7 +230,7 @@ const particleSystem = {
   }
 };
 
-// ===== SISTEMA DE CORES ARCO-ÍRIS =====
+// ===== SISTEMA DE CORES ARCO-ÍRIS (mudança a cada 5 blocos) =====
 const colorSystem = {
   rainbowColors: [
     { h: 140, s: 80, l: 50 }, // Verde
@@ -223,7 +244,7 @@ const colorSystem = {
   ],
   
   getSegmentColor(index) {
-    const segmentPerColor = 10;
+    const segmentPerColor = 5; // Mudança a cada 5 blocos
     const colorIndex = Math.floor(index / segmentPerColor) % this.rainbowColors.length;
     const toneIndex = index % segmentPerColor;
     
@@ -233,7 +254,7 @@ const colorSystem = {
     const progress = toneIndex / segmentPerColor;
     const h = baseColor.h + (nextColor.h - baseColor.h) * progress;
     const s = baseColor.s;
-    const l = Math.max(30, baseColor.l - toneIndex * 2);
+    const l = Math.max(30, baseColor.l - toneIndex * 3);
     
     return `hsl(${h}, ${s}%, ${l}%)`;
   }
@@ -537,6 +558,7 @@ const gameLogic = {
   gameOver() {
     gameState.isRunning = false;
     gameState.isGameOver = true;
+    gameState.isFromGameOver = true;
     
     const currentHigh = scoring.getHighScore(gameState.currentGridSize);
     const isNewRecord = scoring.current > currentHigh;
@@ -544,34 +566,24 @@ const gameLogic = {
     elements.finalScore.textContent = scoring.current.toString();
     
     // Atualizar título do game over
-    let gameOverTitle = elements.gameOver.querySelector('h2');
-    if (gameOverTitle) {
-      if (isNewRecord && scoring.current > 0) {
-        gameOverTitle.innerHTML = '🎉 NOVO RECORDE! 🎉<br>Game Over';
-        gameOverTitle.style.color = '#ffd700';
-        gameOverTitle.style.textShadow = '0 0 10px rgba(255, 215, 0, 0.5)';
-      } else {
-        gameOverTitle.textContent = 'Game Over';
-        gameOverTitle.style.color = '';
-        gameOverTitle.style.textShadow = '';
-      }
+    if (isNewRecord && scoring.current > 0) {
+      elements.gameOverTitle.innerHTML = '🎉 NOVO RECORDE! 🎉<br>Game Over';
+      elements.gameOverTitle.style.color = '#ffd700';
+      elements.gameOverTitle.style.textShadow = '0 0 10px rgba(255, 215, 0, 0.5)';
+    } else {
+      elements.gameOverTitle.textContent = 'Game Over';
+      elements.gameOverTitle.style.color = '';
+      elements.gameOverTitle.style.textShadow = '';
     }
     
     // Mostrar informações de recorde
-    let recordInfo = elements.gameOver.querySelector('.record-info');
-    if (!recordInfo) {
-      recordInfo = document.createElement('div');
-      recordInfo.className = 'record-info';
-      elements.gameOver.insertBefore(recordInfo, elements.gameOver.querySelector('.game-over-buttons'));
-    }
-    
     const gridName = GAME_CONFIG.GRID_SIZES[gameState.currentGridSize].name;
-    recordInfo.innerHTML = `
+    elements.recordInfo.innerHTML = `
       <p>Recorde (${gridName}): <strong>${Math.max(scoring.current, currentHigh)}</strong></p>
       ${isNewRecord ? '<p style="color: #ffd700;">🏆 Parabéns pelo novo recorde! 🏆</p>' : ''}
     `;
     
-    elements.gameOver.classList.remove('hidden');
+    elements.gameOverModal.classList.remove('hidden');
     elements.pauseBtn.classList.add('hidden');
     elements.startBtn.classList.remove('hidden');
     if (elements.homeBtn) elements.homeBtn.classList.add('hidden');
@@ -608,7 +620,8 @@ const controls = {
   },
   
   isModalOpen() {
-    return elements.gameModal && !elements.gameModal.classList.contains('hidden');
+    return (elements.gameModal && !elements.gameModal.classList.contains('hidden')) ||
+           (elements.gameOverModal && !elements.gameOverModal.classList.contains('hidden'));
   },
   
   setupKeyboard() {
@@ -701,12 +714,12 @@ const gameControls = {
     gameState.isRunning = true;
     gameState.isPaused = false;
     gameState.isGameOver = false;
+    gameState.isFromGameOver = false;
     
     elements.startBtn.classList.add('hidden');
     elements.pauseBtn.classList.remove('hidden');
     elements.pauseBtn.textContent = 'Pausar';
     if (elements.homeBtn) elements.homeBtn.classList.remove('hidden');
-    elements.gameOver.classList.add('hidden');
   },
   
   pause() {
@@ -730,11 +743,13 @@ const gameControls = {
   },
   
   newGame() {
-    if (confirm('Tem certeza? Tudo será perdido.')) {
-      gameState.wasRunningBeforeMenu = false;
-      gameLogic.reset();
-      modalSystem.show();
+    if (gameState.wasRunningBeforeMenu && !confirm('Tem certeza? Tudo será perdido.')) {
+      return;
     }
+    gameState.wasRunningBeforeMenu = false;
+    gameState.isFromGameOver = false;
+    gameLogic.reset();
+    modalSystem.show();
   }
 };
 
@@ -834,14 +849,19 @@ const modalSystem = {
   
   show() {
     const isResuming = gameState.wasRunningBeforeMenu && !gameState.isGameOver;
+    const isFromGameOver = gameState.isFromGameOver;
     
     elements.confirmBtn.textContent = isResuming ? 'Retomar' : 'Começar';
-    elements.newGameBtn.style.display = isResuming ? 'block' : 'none';
+    elements.newGameBtn.style.display = 'block';
     
     // Atualizar título do modal
     const modalTitle = elements.gameModal.querySelector('#modal-title');
     if (modalTitle) {
-      modalTitle.textContent = isResuming ? 'Menu' : 'Snake';
+      if (isResuming && !isFromGameOver) {
+        modalTitle.textContent = 'Snake';
+      } else {
+        modalTitle.textContent = 'Bem-vindo(a) ao Snake!';
+      }
     }
     
     this.updateGridSelection();
@@ -867,9 +887,9 @@ function gameLoop(currentTime) {
   
   gameState.accumulator += deltaTime;
   
-  while (gameState.accumulator >= GAME_CONFIG.GAME_SPEED) {
+  while (gameState.accumulator >= gameState.currentSpeed) {
     gameLogic.update();
-    gameState.accumulator -= GAME_CONFIG.GAME_SPEED;
+    gameState.accumulator -= gameState.currentSpeed;
   }
   
   renderer.render();

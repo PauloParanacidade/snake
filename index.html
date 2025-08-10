@@ -19,6 +19,7 @@
           <div class="score-board">
             <span>Pontos: <strong id="score">0</strong></span>
             <span>Recorde: <strong id="highScore">0</strong></span>
+            <span>Velocidade: <strong id="speedLevel">1 de 10</strong></span>
           </div>
           <div class="game-controls">
             <button id="startBtn" class="game-btn">Iniciar</button>
@@ -30,21 +31,13 @@
           <canvas id="gameCanvas" width="520" height="520" tabindex="0" aria-label="Área do jogo"></canvas>
         </div>
       </div>
-
-      <div id="gameOver" class="game-over hidden" aria-live="polite">
-        <h2>Game Over</h2>
-        <p>Sua pontuação: <strong id="finalScore">0</strong></p>
-        <div class="game-over-buttons">
-          <button id="resumeFromOver" class="game-btn" type="button">Jogar de novo</button>
-        </div>
-      </div>
     </main>
   </div>
 
   <!-- Modal de Início/Configurações -->
   <div id="gameModal" class="modal-overlay hidden" role="dialog" aria-modal="true">
     <div class="modal" role="document">
-      <h2 id="modal-title">Snake</h2>
+      <h2 id="modal-title">Bem-vindo(a) ao Snake!</h2>
       <p class="subtitle">Criado por Paulinho</p>
 
       <div class="modal-section">
@@ -52,7 +45,7 @@
         <div class="grid-options">
           <label class="option">
             <input type="radio" name="gridSize" value="small" />
-            <span>Pequeno (15x15)</span>
+            <span>Pequeno (8x8)</span>
             <span class="hs">Recorde: <strong id="highScoreSmall">0</strong></span>
           </label>
           <label class="option">
@@ -62,7 +55,7 @@
           </label>
           <label class="option">
             <input type="radio" name="gridSize" value="large" />
-            <span>Grande (25x25)</span>
+            <span>Grande (30x30)</span>
             <span class="hs">Recorde: <strong id="highScoreLarge">0</strong></span>
           </label>
         </div>
@@ -82,16 +75,28 @@
     </div>
   </div>
 
+  <!-- Modal de Game Over -->
+  <div id="gameOverModal" class="modal-overlay hidden" role="dialog" aria-modal="true">
+    <div class="modal" role="document">
+      <h2 id="gameOverTitle">Game Over</h2>
+      <p>Sua pontuação: <strong id="finalScore">0</strong></p>
+      <div class="record-info" id="recordInfo"></div>
+      <div class="modal-actions">
+        <button id="resumeFromOver" class="game-btn">Jogar de novo</button>
+      </div>
+    </div>
+  </div>
+
   <script src="script.js"></script>
   <script>
     // Ligar botão "Jogar de novo" para abrir modal
     document.addEventListener('DOMContentLoaded', () => {
       const resumeBtn = document.getElementById('resumeFromOver');
       resumeBtn.addEventListener('click', () => {
-        document.getElementById('gameOver').classList.add('hidden');
-        const modal = document.getElementById('gameModal');
-        modal.classList.remove('hidden');
-        // O restante da lógica é tratada pelo modalSystem no script.js
+        document.getElementById('gameOverModal').classList.add('hidden');
+        gameState.wasRunningBeforeMenu = false;
+        gameState.isFromGameOver = true;
+        modalSystem.show();
       });
     });
   </script>

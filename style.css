@@ -47,14 +47,11 @@ canvas { width: 520px; height: 520px; background: #0a0f18; border-radius: 10px; 
 .game-btn.danger { background: linear-gradient(180deg, rgba(239,68,68,0.95), rgba(220,38,38,0.95)); border: 1px solid rgba(239,68,68,0.4); }
 .hidden { display: none !important; }
 
-/* Game Over */
-.game-over { margin-top: 12px; background: rgba(18,24,38,0.9); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 16px; text-align: center; }
-.game-over h2 { margin: 0 0 8px; }
-.game-over .record-info { color: var(--muted); margin-top: 8px; }
-.game-over .game-over-buttons { margin-top: 12px; display: flex; justify-content: center; gap: 8px; }
+/* Game Over (depreciado, agora modal) */
+.game-over { display:none; }
 
-/* Modal */
-.modal-overlay { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,0.95); backdrop-filter: blur(3px); z-index: 50; }
+/* Modais */
+.modal-overlay { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,0.9); backdrop-filter: blur(3px); z-index: 1000; }
 .modal { background: rgba(20, 20, 20, 0.98); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 16px; width: min(520px, calc(100% - 24px)); box-shadow: 0 20px 80px rgba(0,0,0,0.6); }
 .modal h2 { margin: 0 0 4px; }
 .modal .subtitle { margin: 0 0 12px; color: var(--muted); }
