@@ -1,252 +1,73 @@
-* {
-  box-sizing: border-box;
+/* Estilos base */
+* { box-sizing: border-box; }
+:root {
+  --bg: #0b0f17;
+  --panel: #121826;
+  --accent: #22c55e;
+  --accent-2: #3b82f6;
+  --text: #e5e7eb;
+  --muted: #9ca3af;
+  --danger: #ef4444;
 }
-
-body {
+html, body {
   margin: 0;
-  font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
-  background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
-  color: #e6f1f5;
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  padding: 0;
+  height: 100%;
+  background: radial-gradient(1000px 700px at 20% 10%, #0f172a, #0b0f17 60%);
+  color: var(--text);
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
 }
 
-.game-container {
-  width: 95%;
-  max-width: 700px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 16px;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-  padding: 20px;
+.container {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 24px 16px 48px;
 }
-
-.game-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.game-header h1 {
-  font-size: 28px;
-  margin: 0;
-}
-
-.game-info {
-  display: flex;
-  gap: 16px;
-}
-
-.game-area {
-  position: relative;
-  margin: 16px 0;
-  display: grid;
-  place-items: center;
-  width: 100%;
-}
-
-#gameCanvas {
-  background: #0b1720;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  width: 100%;
-  height: auto;
-  max-width: 480px;
-  aspect-ratio: 1 / 1;
-  image-rendering: pixelated;
-}
-
-.game-over {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
+.header {
   text-align: center;
-  background: rgba(0, 0, 0, 0.6);
-  border-radius: 12px;
+  margin-bottom: 16px;
 }
+.header h1 { margin: 0 0 4px; font-size: 28px; letter-spacing: 1px; }
+.header .subtitle { margin: 0; color: var(--muted); font-size: 14px; }
 
-.hidden {
-  display: none !important;
-}
+.main { display: grid; gap: 16px; }
+.game-panel { background: rgba(18,24,38,0.75); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.3) inset; }
+.game-info { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.score-board { display: flex; gap: 16px; align-items: center; font-size: 14px; }
+.score-board strong { color: #fff; }
+.game-controls { display: flex; gap: 8px; }
+.canvas-wrapper { display: flex; justify-content: center; align-items: center; padding: 12px; }
+canvas { width: 520px; height: 520px; background: #0a0f18; border-radius: 10px; border: 1px solid rgba(255,255,255,0.08); box-shadow: 0 10px 40px rgba(0,0,0,0.4) inset; touch-action: none; }
 
-.start-btn,
-.pause-btn,
-.restart-btn {
-  background: #1db954;
-  color: white;
-  border: none;
-  padding: 10px 16px;
-  border-radius: 8px;
-  font-size: 16px;
-  cursor: pointer;
-  transition: transform 0.1s ease, background 0.2s ease;
-}
+/* Botões */
+.game-btn { background: linear-gradient(180deg, rgba(34,197,94,0.95), rgba(22,163,74,0.95)); border: 1px solid rgba(34,197,94,0.4); color: #fff; padding: 8px 12px; border-radius: 8px; cursor: pointer; transition: transform .06s ease, filter .2s ease, background .2s ease; font-weight: 600; font-size: 14px; }
+.game-btn:hover { filter: brightness(1.05); }
+.game-btn:active { transform: translateY(1px); }
+.game-btn.secondary { background: linear-gradient(180deg, rgba(59,130,246,0.95), rgba(37,99,235,0.95)); border: 1px solid rgba(59,130,246,0.4); }
+.game-btn.danger { background: linear-gradient(180deg, rgba(239,68,68,0.95), rgba(220,38,38,0.95)); border: 1px solid rgba(239,68,68,0.4); }
+.hidden { display: none !important; }
 
-.pause-btn {
-  background: #f59e0b;
-}
+/* Game Over */
+.game-over { margin-top: 12px; background: rgba(18,24,38,0.9); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 16px; text-align: center; }
+.game-over h2 { margin: 0 0 8px; }
+.game-over .record-info { color: var(--muted); margin-top: 8px; }
+.game-over .game-over-buttons { margin-top: 12px; display: flex; justify-content: center; gap: 8px; }
 
-.restart-btn {
-  background: #3b82f6;
-}
+/* Modal */
+.modal-overlay { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,0.95); backdrop-filter: blur(3px); z-index: 50; }
+.modal { background: rgba(20, 20, 20, 0.98); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 16px; width: min(520px, calc(100% - 24px)); box-shadow: 0 20px 80px rgba(0,0,0,0.6); }
+.modal h2 { margin: 0 0 4px; }
+.modal .subtitle { margin: 0 0 12px; color: var(--muted); }
+.modal-section { margin: 12px 0; }
+.grid-options { display: grid; gap: 8px; }
+.option { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; padding: 8px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.06); background: rgba(255,255,255,0.02); }
+.option input[type="radio"] { accent-color: var(--accent); transform: scale(1.1); }
+.option .hs { color: var(--muted); font-size: 13px; }
+.toggle { display: flex; gap: 8px; align-items: center; margin: 6px 0; }
+.toggle input[type="checkbox"] { accent-color: var(--accent); transform: scale(1.1); }
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
 
-.start-btn:hover,
-.pause-btn:hover,
-.restart-btn:hover {
-  transform: translateY(-1px);
-  filter: brightness(1.05);
-}
-
-.game-controls {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.control-instructions {
-  font-size: 14px;
-  color: #c7d2fe;
-}
-
-.desktop-only { display: block; }
-.mobile-only { display: none; }
-
-.button-group { 
-  display: flex; 
-  gap: 8px; 
-  align-items: center; 
-}
-
-.touch-controls { 
-  display: none; 
-  margin-top: 12px; 
-}
-
-.touch-row { 
-  display: flex; 
-  justify-content: center; 
-  gap: 12px; 
-}
-
-.touch-btn {
-  font-size: 22px;
-  width: 56px;
-  height: 56px;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  background: rgba(255, 255, 255, 0.08);
-  color: #fff;
-  cursor: pointer;
-}
-
-.touch-btn:active { 
-  filter: brightness(1.2); 
-}
-
-/* Modal de velocidade */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  background: rgba(0, 0, 0, 0.95);
-  z-index: 50;
-}
-
-.modal {
-  width: min(92vw, 420px);
-  background: rgba(20, 20, 20, 0.98);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 14px;
-  padding: 20px;
-  text-align: center;
-}
-
-@media (max-width: 520px) {
-  .modal { 
-    padding: 16px; 
-  }
-}
-
-.speed-options {
-  display: flex;
-  gap: 16px;
-  justify-content: center;
-  margin: 12px 0 18px;
-  flex-wrap: wrap;
-}
-
-.speed-options label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: rgba(255,255,255,0.06);
-  padding: 8px 12px;
-  border-radius: 10px;
-  cursor: pointer;
-  transition: background 0.2s ease;
-}
-
-.speed-options label:hover {
-  background: rgba(255,255,255,0.12);
-}
-
-.speed-options input[type="radio"] {
-  accent-color: #1db954;
-}
-
-@media (max-width: 520px) {
-  .game-container { 
-    padding: 14px; 
-  }
-  
-  .game-header h1 { 
-    font-size: 22px; 
-  }
-  
-  .control-instructions { 
-    font-size: 13px; 
-  }
-
-  .desktop-only { 
-    display: none; 
-  }
-  
-  .mobile-only { 
-    display: block; 
-  }
-
-  .touch-controls { 
-    display: block; 
-  }
-
-  .game-info { 
-    width: 100%; 
-    justify-content: space-between; 
-  }
-
-  .start-btn, .pause-btn, .restart-btn { 
-    padding: 12px 18px; 
-    font-size: 16px; 
-  }
-  
-  .game-controls {
-    flex-direction: column;
-    align-items: stretch;
-  }
-  
-  .modal { 
-    padding: 16px; 
-  }
-  
-  .speed-options { 
-    gap: 10px; 
-  }
+/* Toques responsivos */
+@media (max-width: 640px) {
+  canvas { width: 92vw; height: 92vw; }
 }

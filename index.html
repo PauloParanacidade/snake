@@ -1,70 +1,99 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Snake Game</title>
-    <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Snake</title>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-    <div class="game-container">
-        <div class="game-header">
-            <h1>Snake Game</h1>
-            <div class="game-info">
-                <div class="score">Score: <span id="score">0</span></div>
-                <div class="high-score">High Score: <span id="highScore">0</span></div>
-            </div>
-        </div>
-        
-        <div class="game-area">
-            <canvas id="gameCanvas" width="400" height="400"></canvas>
-            <div id="gameOver" class="game-over hidden">
-                <h2>Game Over!</h2>
-                <p>Final Score: <span id="finalScore">0</span></p>
-                <button id="restartBtn" class="restart-btn">Play Again</button>
-            </div>
-        </div>
-        
-        <div class="game-controls">
-            <div class="control-instructions">
-                <p class="desktop-only">Use arrow keys or WASD to control the snake</p>
-                <p class="mobile-only">Tap the direction buttons to control the snake</p>
-                <p>Eat the red food to grow and increase your score</p>
-            </div>
-            <div class="button-group">
-                <button id="startBtn" class="start-btn">Start Game</button>
-                <button id="pauseBtn" class="pause-btn hidden">Pause</button>
-            </div>
-        </div>
-        
-        <!-- Touch Controls for Mobile -->
-        <div class="touch-controls">
-            <div class="touch-row">
-                <button class="touch-btn" data-direction="up">↑</button>
-            </div>
-            <div class="touch-row">
-                <button class="touch-btn" data-direction="left">←</button>
-                <button class="touch-btn" data-direction="down">↓</button>
-                <button class="touch-btn" data-direction="right">→</button>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Modal inicial de velocidade -->
-    <div id="speedModal" class="modal-overlay">
-        <div class="modal">
-            <h2>Bem-vindo(a) ao Snake!</h2>
-            <p>Criador por Paulinho</p>
-            <p>Escolha a velocidade do jogo:</p>
-            <div class="speed-options">
-                <label><input type="radio" name="speed" value="slow" checked> Lento</label>
-                <label><input type="radio" name="speed" value="normal"> Normal</label>
-                <label><input type="radio" name="speed" value="fast"> Rápido</label>
-            </div>
-            <button id="confirmSpeedBtn" class="start-btn">Começar</button>
-        </div>
-    </div>
+  <div class="container">
+    <header class="header">
+      <h1>Snake</h1>
+      <p class="subtitle">Criado por Paulinho</p>
+    </header>
 
-    <script src="script.js"></script>
+    <main class="main">
+      <div class="game-panel">
+        <div class="game-info">
+          <div class="score-board">
+            <span>Pontos: <strong id="score">0</strong></span>
+            <span>Recorde: <strong id="highScore">0</strong></span>
+          </div>
+          <div class="game-controls">
+            <button id="startBtn" class="game-btn">Iniciar</button>
+            <button id="pauseBtn" class="game-btn hidden">Pausar</button>
+            <button id="restartBtn" class="game-btn">Reiniciar</button>
+          </div>
+        </div>
+        <div class="canvas-wrapper">
+          <canvas id="gameCanvas" width="520" height="520" tabindex="0" aria-label="Área do jogo"></canvas>
+        </div>
+      </div>
+
+      <div id="gameOver" class="game-over hidden" aria-live="polite">
+        <h2>Game Over</h2>
+        <p>Sua pontuação: <strong id="finalScore">0</strong></p>
+        <div class="game-over-buttons">
+          <button id="resumeFromOver" class="game-btn" type="button">Jogar de novo</button>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Modal de Início/Configurações -->
+  <div id="gameModal" class="modal-overlay hidden" role="dialog" aria-modal="true">
+    <div class="modal" role="document">
+      <h2 id="modal-title">Snake</h2>
+      <p class="subtitle">Criado por Paulinho</p>
+
+      <div class="modal-section">
+        <h3>Tamanho da Grade</h3>
+        <div class="grid-options">
+          <label class="option">
+            <input type="radio" name="gridSize" value="small" />
+            <span>Pequeno (15x15)</span>
+            <span class="hs">Recorde: <strong id="highScoreSmall">0</strong></span>
+          </label>
+          <label class="option">
+            <input type="radio" name="gridSize" value="medium" />
+            <span>Médio (20x20)</span>
+            <span class="hs">Recorde: <strong id="highScoreMedium">0</strong></span>
+          </label>
+          <label class="option">
+            <input type="radio" name="gridSize" value="large" />
+            <span>Grande (25x25)</span>
+            <span class="hs">Recorde: <strong id="highScoreLarge">0</strong></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="modal-section">
+        <h3>Opções</h3>
+        <label class="toggle"><input type="checkbox" name="showGrid" checked /> Mostrar grade</label>
+        <label class="toggle"><input type="checkbox" name="soundOn" checked /> Som</label>
+        <label class="toggle"><input type="checkbox" name="showParticles" checked /> Partículas</label>
+      </div>
+
+      <div class="modal-actions">
+        <button id="confirmBtn" class="game-btn">Começar</button>
+        <button id="newGameBtn" class="game-btn secondary">Novo Jogo</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+  <script>
+    // Ligar botão "Jogar de novo" para abrir modal
+    document.addEventListener('DOMContentLoaded', () => {
+      const resumeBtn = document.getElementById('resumeFromOver');
+      resumeBtn.addEventListener('click', () => {
+        document.getElementById('gameOver').classList.add('hidden');
+        const modal = document.getElementById('gameModal');
+        modal.classList.remove('hidden');
+        // O restante da lógica é tratada pelo modalSystem no script.js
+      });
+    });
+  </script>
 </body>
 </html>

@@ -1,30 +1,16 @@
 /**
- * Snake Game - Versão Refatorada
- * Implementa requestAnimationFrame, softcap de velocidade, preferências e melhor UX
+ * Snake Game - Versão Completa com Todas as Melhorias
  */
 
-// ===== CONFIGURAÇÃO E CONSTANTES =====
+// ===== CONFIGURAÇÃO GLOBAL =====
 const GAME_CONFIG = {
-  GRID_SIZE: 20,
-  TILE_COUNT: 20,
-  
-  // Sistema de velocidade (intervalos em ms)
-  SPEED_PRESETS: {
-    slow: 500,
-    normal: 250,
-    fast: 100
+  GRID_SIZES: {
+    small: { tiles: 15, name: 'Pequeno' },
+    medium: { tiles: 20, name: 'Médio' },
+    large: { tiles: 25, name: 'Grande' }
   },
-  
-  // Parâmetros do softcap
-  MIN_INTERVAL: 60,
-  SOFTCAP_THRESHOLD: 8, // primeiros 8 alimentos
-  SPEED_REDUCTION_BEFORE_CAP: 8, // k1 = 8ms por alimento
-  SPEED_REDUCTION_AFTER_CAP: 2,  // k2 = 2ms por alimento
-  
-  // Animação e UX
-  SPEED_TWEEN_DURATION: 200, // ms para transição suave
-  PARTICLE_COUNT: 8,
-  TOUCH_TARGET_SIZE: 56 // px mínimo
+  GAME_SPEED: 600,
+  PARTICLE_COUNT: 10
 };
 
 // ===== ESTADO DO JOGO =====
@@ -34,99 +20,93 @@ const gameState = {
   nextDirection: { x: 1, y: 0 },
   food: { x: 10, y: 10 },
   score: 0,
-  level: 1,
-  currentInterval: 120,
-  targetInterval: 120,
-  startLength: 3,
+  currentGridSize: 'large',
+  tileCount: 25,
   
-  // Estados de controle
   isRunning: false,
   isGameOver: false,
   isPaused: false,
   wasRunningBeforeMenu: false,
   
-  // Animação
   lastFrameTime: 0,
   accumulator: 0,
-  speedTweenStart: 0,
-  initialTweenInterval: 0,
-  
-  // Partículas
   particles: []
 };
 
-// ===== SISTEMA DE PREFERÊNCIAS =====
+// ===== PREFERÊNCIAS E PERSISTÊNCIA =====
 const preferences = {
-  initialSpeed: 'slow',
+  gridSize: 'large',
   soundOn: true,
   showGrid: true,
   showParticles: true,
   
-  // Carregar do localStorage
   load() {
-    const saved = localStorage.getItem('snakePreferences');
-    if (saved) {
-      Object.assign(this, JSON.parse(saved));
+    try {
+      const saved = JSON.parse(localStorage.getItem('snakePreferences') || '{}');
+      Object.assign(this, saved);
+    } catch (e) {
+      // Usar valores padrão se houver erro
     }
-    return this;
   },
   
-  // Salvar no localStorage
   save() {
-    localStorage.setItem('snakePreferences', JSON.stringify(this));
-  },
-  
-  // Resetar para padrões
-  reset() {
-    this.initialSpeed = 'slow';
-    this.soundOn = true;
-    this.showGrid = true;
-    this.showParticles = true;
-    this.save();
+    localStorage.setItem('snakePreferences', JSON.stringify({
+      gridSize: this.gridSize,
+      soundOn: this.soundOn,
+      showGrid: this.showGrid,
+      showParticles: this.showParticles
+    }));
   }
 };
 
 // ===== ELEMENTOS DOM =====
 const elements = {
-  // Canvas
   canvas: document.getElementById('gameCanvas'),
   ctx: null,
   
-  // UI Elements
   score: document.getElementById('score'),
   highScore: document.getElementById('highScore'),
   finalScore: document.getElementById('finalScore'),
   gameOver: document.getElementById('gameOver'),
   
-  // Buttons
   startBtn: document.getElementById('startBtn'),
   pauseBtn: document.getElementById('pauseBtn'),
   restartBtn: document.getElementById('restartBtn'),
-  homeBtn: null, // Será criado
+  homeBtn: null,
   
-  // Modal
-  speedModal: document.getElementById('speedModal'),
-  confirmSpeedBtn: document.getElementById('confirmSpeedBtn'),
+  gameModal: document.getElementById('gameModal'),
+  confirmBtn: document.getElementById('confirmBtn'),
+  newGameBtn: document.getElementById('newGameBtn'),
   
-  // Indicators (serão criados)
-  speedIndicator: null,
-  levelIndicator: null
+  highScoreSmall: document.getElementById('highScoreSmall'),
+  highScoreMedium: document.getElementById('highScoreMedium'),
+  highScoreLarge: document.getElementById('highScoreLarge')
 };
 
 // ===== SISTEMA DE PONTUAÇÃO =====
 const scoring = {
   current: 0,
-  high: parseInt(localStorage.getItem('snakeHighScore') || '0', 10),
+  
+  getHighScore(gridSize) {
+    return parseInt(localStorage.getItem(`snakeHighScore_${gridSize}`) || '0', 10);
+  },
+  
+  setHighScore(gridSize, score) {
+    localStorage.setItem(`snakeHighScore_${gridSize}`, score.toString());
+  },
   
   update(points) {
     this.current += points;
     elements.score.textContent = this.current.toString();
     
-    if (this.current > this.high) {
-      this.high = this.current;
-      localStorage.setItem('snakeHighScore', this.high.toString());
-      elements.highScore.textContent = this.high.toString();
+    const currentHigh = this.getHighScore(gameState.currentGridSize);
+    if (this.current > currentHigh) {
+      this.setHighScore(gameState.currentGridSize, this.current);
+      elements.highScore.textContent = this.current.toString();
+      this.updateModalHighScores();
+      return true; // Novo recorde!
     }
+    return false;
   },
   
   reset() {
@@ -135,7 +115,14 @@ const scoring = {
   },
   
   init() {
-    elements.highScore.textContent = this.high.toString();
+    elements.highScore.textContent = this.getHighScore(gameState.currentGridSize).toString();
+    this.updateModalHighScores();
+  },
+  
+  updateModalHighScores() {
+    if (elements.highScoreSmall) elements.highScoreSmall.textContent = this.getHighScore('small');
+    if (elements.highScoreMedium) elements.highScoreMedium.textContent = this.getHighScore('medium');
+    if (elements.highScoreLarge) elements.highScoreLarge.textContent = this.getHighScore('large');
   }
 };
 
@@ -147,105 +134,36 @@ const soundSystem = {
     try {
       this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
     } catch (e) {
-      console.log('Web Audio API not supported');
+      console.warn('Web Audio API não suportada');
     }
   },
   
-  // Gera um tom simples
   playTone(frequency, duration, type = 'sine') {
     if (!preferences.soundOn || !this.audioContext) return;
     
-    const oscillator = this.audioContext.createOscillator();
-    const gainNode = this.audioContext.createGain();
-    
-    oscillator.connect(gainNode);
-    gainNode.connect(this.audioContext.destination);
-    
-    oscillator.frequency.setValueAtTime(frequency, this.audioContext.currentTime);
-    oscillator.type = type;
-    
-    gainNode.gain.setValueAtTime(0.1, this.audioContext.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + duration);
-    
-    oscillator.start(this.audioContext.currentTime);
-    oscillator.stop(this.audioContext.currentTime + duration);
+    try {
+      const oscillator = this.audioContext.createOscillator();
+      const gainNode = this.audioContext.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(this.audioContext.destination);
+      
+      oscillator.frequency.setValueAtTime(frequency, this.audioContext.currentTime);
+      oscillator.type = type;
+      
+      gainNode.gain.setValueAtTime(0.1, this.audioContext.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + duration);
+      
+      oscillator.start(this.audioContext.currentTime);
+      oscillator.stop(this.audioContext.currentTime + duration);
+    } catch (e) {
+      // Ignorar erros de áudio
+    }
   },
   
-  // Sons específicos
   eat() { this.playTone(800, 0.1); },
-  levelUp() { this.playTone(1200, 0.2); },
-  gameOver() { this.playTone(200, 0.5, 'sawtooth'); }
-};
-
-// ===== SISTEMA DE VELOCIDADE COM SOFTCAP =====
-const speedSystem = {
-  // Calcula o intervalo baseado no softcap
-  calculateInterval(snakeLength) {
-    const initialInterval = GAME_CONFIG.SPEED_PRESETS[preferences.initialSpeed];
-    const delta = snakeLength - gameState.startLength;
-    
-    if (delta <= 0) return initialInterval;
-    
-    let reduction;
-    if (delta <= GAME_CONFIG.SOFTCAP_THRESHOLD) {
-      reduction = GAME_CONFIG.SPEED_REDUCTION_BEFORE_CAP * delta;
-    } else {
-      reduction = GAME_CONFIG.SPEED_REDUCTION_BEFORE_CAP * GAME_CONFIG.SOFTCAP_THRESHOLD +
-                  GAME_CONFIG.SPEED_REDUCTION_AFTER_CAP * (delta - GAME_CONFIG.SOFTCAP_THRESHOLD);
-    }
-    
-    const newInterval = initialInterval - reduction;
-    return Math.max(GAME_CONFIG.MIN_INTERVAL, newInterval);
-  },
-  
-  // Atualiza velocidade com transição suave
-  updateSpeed(newLength) {
-    const targetInterval = this.calculateInterval(newLength);
-    
-    if (targetInterval !== gameState.targetInterval) {
-      gameState.initialTweenInterval = gameState.currentInterval;
-      gameState.targetInterval = targetInterval;
-      gameState.speedTweenStart = performance.now();
-      
-      // Calcular nível baseado na velocidade
-      const speedReduction = GAME_CONFIG.SPEED_PRESETS[preferences.initialSpeed] - targetInterval;
-      gameState.level = Math.floor(speedReduction / GAME_CONFIG.SPEED_REDUCTION_BEFORE_CAP) + 1;
-      
-      this.updateSpeedIndicator();
-      
-      if (gameState.level > 1 && newLength > gameState.startLength) {
-        soundSystem.levelUp();
-      }
-    }
-  },
-  
-  // Interpola entre velocidades (easeOutCubic)
-  tweenSpeed(currentTime) {
-    if (gameState.speedTweenStart === 0) return;
-    
-    const elapsed = currentTime - gameState.speedTweenStart;
-    const progress = Math.min(elapsed / GAME_CONFIG.SPEED_TWEEN_DURATION, 1);
-    
-    // easeOutCubic: 1 - (1-t)³
-    const eased = 1 - Math.pow(1 - progress, 3);
-    
-    gameState.currentInterval = gameState.initialTweenInterval + 
-      (gameState.targetInterval - gameState.initialTweenInterval) * eased;
-    
-    if (progress >= 1) {
-      gameState.speedTweenStart = 0;
-      gameState.currentInterval = gameState.targetInterval;
-    }
-  },
-  
-  // Atualiza indicador visual
-  updateSpeedIndicator() {
-    if (!elements.speedIndicator) return;
-    
-    const speedName = preferences.initialSpeed.charAt(0).toUpperCase() + 
-                     preferences.initialSpeed.slice(1);
-    elements.speedIndicator.textContent = `Velocidade: ${speedName} • Nível: ${gameState.level}`;
-  }
+  gameOver() { this.playTone(200, 0.5, 'sawtooth'); },
+  record() { this.playTone(1000, 0.3); this.playTone(1200, 0.3); }
 };
 
 // ===== SISTEMA DE PARTÍCULAS =====
@@ -255,10 +173,10 @@ const particleSystem = {
     
     for (let i = 0; i < GAME_CONFIG.PARTICLE_COUNT; i++) {
       gameState.particles.push({
-        x: x + Math.random() * 20 - 10,
-        y: y + Math.random() * 20 - 10,
-        vx: (Math.random() - 0.5) * 4,
-        vy: (Math.random() - 0.5) * 4,
+        x: x,
+        y: y,
+        vx: (Math.random() - 0.5) * 8,
+        vy: (Math.random() - 0.5) * 8,
         life: 1.0,
         decay: 0.02,
         size: Math.random() * 4 + 2
@@ -271,7 +189,7 @@ const particleSystem = {
       particle.x += particle.vx;
       particle.y += particle.vy;
       particle.life -= particle.decay;
-      particle.vx *= 0.98; // resistência do ar
+      particle.vx *= 0.98;
       particle.vy *= 0.98;
       
       return particle.life > 0;
@@ -283,7 +201,7 @@ const particleSystem = {
     
     gameState.particles.forEach(particle => {
       const alpha = particle.life;
-      elements.ctx.fillStyle = `rgba(255, 100, 100, ${alpha})`;
+      elements.ctx.fillStyle = `rgba(255, 150, 50, ${alpha})`;
       elements.ctx.beginPath();
       elements.ctx.arc(particle.x, particle.y, particle.size * particle.life, 0, Math.PI * 2);
       elements.ctx.fill();
@@ -291,81 +209,198 @@ const particleSystem = {
   }
 };
 
+// ===== SISTEMA DE CORES ARCO-ÍRIS =====
+const colorSystem = {
+  rainbowColors: [
+    { h: 140, s: 80, l: 50 }, // Verde
+    { h: 180, s: 80, l: 50 }, // Ciano
+    { h: 240, s: 80, l: 50 }, // Azul
+    { h: 280, s: 80, l: 50 }, // Roxo
+    { h: 320, s: 80, l: 50 }, // Magenta
+    { h: 0, s: 80, l: 50 },   // Vermelho
+    { h: 40, s: 80, l: 50 },  // Laranja
+    { h: 60, s: 80, l: 50 }   // Amarelo
+  ],
+  
+  getSegmentColor(index) {
+    const segmentPerColor = 10;
+    const colorIndex = Math.floor(index / segmentPerColor) % this.rainbowColors.length;
+    const toneIndex = index % segmentPerColor;
+    
+    const baseColor = this.rainbowColors[colorIndex];
+    const nextColor = this.rainbowColors[(colorIndex + 1) % this.rainbowColors.length];
+    
+    const progress = toneIndex / segmentPerColor;
+    const h = baseColor.h + (nextColor.h - baseColor.h) * progress;
+    const s = baseColor.s;
+    const l = Math.max(30, baseColor.l - toneIndex * 2);
+    
+    return `hsl(${h}, ${s}%, ${l}%)`;
+  }
+};
+
 // ===== SISTEMA DE DESENHO =====
 const renderer = {
-  // Tamanho dinâmico da célula
   getCellSize() {
-    const canvasSize = elements.canvas.getBoundingClientRect().width;
-    return canvasSize / GAME_CONFIG.TILE_COUNT;
+    return elements.canvas.width / gameState.tileCount;
   },
   
-  // Limpa o canvas
   clear() {
-    elements.ctx.save();
-    elements.ctx.setTransform(1, 0, 0, 1, 0, 0);
     elements.ctx.clearRect(0, 0, elements.canvas.width, elements.canvas.height);
-    elements.ctx.restore();
   },
   
-  // Desenha a grade
   drawGrid() {
     if (!preferences.showGrid) return;
     
     const cellSize = this.getCellSize();
-    elements.ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+    elements.ctx.strokeStyle = 'rgba(255,255,255,0.1)';
     elements.ctx.lineWidth = 1;
     
-    for (let i = 0; i <= GAME_CONFIG.TILE_COUNT; i++) {
-      const pos = i * cellSize + 0.5;
+    // Desenhar linhas verticais e horizontais corretamente
+    for (let i = 0; i <= gameState.tileCount; i++) {
+      const pos = Math.round(i * cellSize) + 0.5; // +0.5 para linhas nítidas
       
       // Linhas verticais
       elements.ctx.beginPath();
       elements.ctx.moveTo(pos, 0);
-      elements.ctx.lineTo(pos, elements.canvas.height);
+      elements.ctx.lineTo(pos, gameState.tileCount * cellSize);
       elements.ctx.stroke();
       
       // Linhas horizontais
       elements.ctx.beginPath();
       elements.ctx.moveTo(0, pos);
-      elements.ctx.lineTo(elements.canvas.width, pos);
+      elements.ctx.lineTo(gameState.tileCount * cellSize, pos);
       elements.ctx.stroke();
     }
   },
   
-  // Desenha a cobrinha
   drawSnake() {
     const cellSize = this.getCellSize();
     
     gameState.snake.forEach((segment, index) => {
       const isHead = index === 0;
-      const progress = index / (gameState.snake.length - 1 || 1);
       
-      // Gradiente de cor: cabeça mais brilhante
-      const hue = 140 - progress * 60;
-      const saturation = isHead ? 80 : 70;
-      const lightness = isHead ? 60 : 50;
-      
-      elements.ctx.fillStyle = `hsl(${hue}, ${saturation}%, ${lightness}%)`;
-      
-      const x = segment.x * cellSize;
-      const y = segment.y * cellSize;
-      const size = cellSize - 1;
-      
-      // Cantos arredondados para a cabeça
       if (isHead) {
-        this.roundedRect(x, y, size, size, 4);
+        elements.ctx.fillStyle = 'hsl(140, 90%, 60%)';
       } else {
-        elements.ctx.fillRect(x, y, size, size);
+        elements.ctx.fillStyle = colorSystem.getSegmentColor(index - 1);
+      }
+      
+      const x = Math.round(segment.x * cellSize);
+      const y = Math.round(segment.y * cellSize);
+      const size = Math.round(cellSize * 0.9);
+      const margin = Math.round(cellSize * 0.05);
+      
+      if (isHead) {
+        this.drawSnakeHead(x + margin, y + margin, size);
+      } else {
+        this.roundedRect(x + margin, y + margin, size, size, 3);
       }
     });
   },
   
-  // Desenha a comida
+  drawSnakeHead(x, y, size) {
+    const centerX = x + size / 2;
+    const centerY = y + size / 2;
+    const dir = gameState.direction;
+    
+    // Corpo da cabeça
+    this.roundedRect(x, y, size, size, size * 0.2);
+    
+    // Olhos
+    elements.ctx.fillStyle = 'white';
+    const eyeSize = size * 0.12;
+    const eyeOffset = size * 0.25;
+    
+    let eye1X, eye1Y, eye2X, eye2Y;
+    
+    if (Math.abs(dir.x) > Math.abs(dir.y)) { // Movimento horizontal
+      eye1X = centerX - eyeOffset;
+      eye1Y = centerY - eyeOffset;
+      eye2X = centerX + eyeOffset;
+      eye2Y = centerY - eyeOffset;
+    } else { // Movimento vertical
+      eye1X = centerX - eyeOffset;
+      eye1Y = centerY - eyeOffset;
+      eye2X = centerX + eyeOffset;
+      eye2Y = centerY - eyeOffset;
+    }
+    
+    // Desenhar olhos
+    elements.ctx.beginPath();
+    elements.ctx.arc(eye1X, eye1Y, eyeSize, 0, Math.PI * 2);
+    elements.ctx.fill();
+    elements.ctx.beginPath();
+    elements.ctx.arc(eye2X, eye2Y, eyeSize, 0, Math.PI * 2);
+    elements.ctx.fill();
+    
+    // Pupilas
+    elements.ctx.fillStyle = 'black';
+    const pupilSize = eyeSize * 0.6;
+    elements.ctx.beginPath();
+    elements.ctx.arc(eye1X, eye1Y, pupilSize, 0, Math.PI * 2);
+    elements.ctx.fill();
+    elements.ctx.beginPath();
+    elements.ctx.arc(eye2X, eye2Y, pupilSize, 0, Math.PI * 2);
+    elements.ctx.fill();
+    
+    // Língua bifurcada
+    elements.ctx.strokeStyle = '#ff4444';
+    elements.ctx.lineWidth = 2;
+    elements.ctx.lineCap = 'round';
+    
+    let tongueStartX, tongueStartY, tongueEndX, tongueEndY;
+    
+    if (dir.x > 0) { // Direita
+      tongueStartX = centerX + size * 0.3;
+      tongueStartY = centerY;
+      tongueEndX = tongueStartX + size * 0.2;
+      tongueEndY = centerY;
+    } else if (dir.x < 0) { // Esquerda
+      tongueStartX = centerX - size * 0.3;
+      tongueStartY = centerY;
+      tongueEndX = tongueStartX - size * 0.2;
+      tongueEndY = centerY;
+    } else if (dir.y > 0) { // Baixo
+      tongueStartX = centerX;
+      tongueStartY = centerY + size * 0.3;
+      tongueEndX = centerX;
+      tongueEndY = tongueStartY + size * 0.2;
+    } else { // Cima
+      tongueStartX = centerX;
+      tongueStartY = centerY - size * 0.3;
+      tongueEndX = centerX;
+      tongueEndY = tongueStartY - size * 0.2;
+    }
+    
+    // Desenhar língua
+    elements.ctx.beginPath();
+    elements.ctx.moveTo(tongueStartX, tongueStartY);
+    elements.ctx.lineTo(tongueEndX, tongueEndY);
+    elements.ctx.stroke();
+    
+    // Bifurcação da língua
+    const forkSize = size * 0.08;
+    elements.ctx.beginPath();
+    if (Math.abs(dir.x) > Math.abs(dir.y)) { // Horizontal
+      elements.ctx.moveTo(tongueEndX, tongueEndY);
+      elements.ctx.lineTo(tongueEndX + (dir.x > 0 ? -forkSize : forkSize), tongueEndY - forkSize);
+      elements.ctx.moveTo(tongueEndX, tongueEndY);
+      elements.ctx.lineTo(tongueEndX + (dir.x > 0 ? -forkSize : forkSize), tongueEndY + forkSize);
+    } else { // Vertical
+      elements.ctx.moveTo(tongueEndX, tongueEndY);
+      elements.ctx.lineTo(tongueEndX - forkSize, tongueEndY + (dir.y > 0 ? -forkSize : forkSize));
+      elements.ctx.moveTo(tongueEndX, tongueEndY);
+      elements.ctx.lineTo(tongueEndX + forkSize, tongueEndY + (dir.y > 0 ? -forkSize : forkSize));
+    }
+    elements.ctx.stroke();
+  },
+  
   drawFood() {
     const cellSize = this.getCellSize();
-    const x = gameState.food.x * cellSize + cellSize / 2;
-    const y = gameState.food.y * cellSize + cellSize / 2;
-    const radius = cellSize / 2 - 2;
+    const x = Math.round(gameState.food.x * cellSize + cellSize / 2);
+    const y = Math.round(gameState.food.y * cellSize + cellSize / 2);
+    const radius = cellSize / 2 - 3;
     
     // Animação de pulsação
     const pulse = Math.sin(Date.now() * 0.005) * 0.1 + 1;
@@ -376,14 +411,13 @@ const renderer = {
     elements.ctx.arc(x, y, animatedRadius, 0, Math.PI * 2);
     elements.ctx.fill();
     
-    // Brilho interno
-    elements.ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+    // Brilho
+    elements.ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
     elements.ctx.beginPath();
     elements.ctx.arc(x - radius * 0.3, y - radius * 0.3, animatedRadius * 0.4, 0, Math.PI * 2);
     elements.ctx.fill();
   },
   
-  // Utilitário para retângulos arredondados
   roundedRect(x, y, width, height, radius) {
     elements.ctx.beginPath();
     elements.ctx.moveTo(x + radius, y);
@@ -399,7 +433,6 @@ const renderer = {
     elements.ctx.fill();
   },
   
-  // Renderiza tudo
   render() {
     this.clear();
     this.drawGrid();
@@ -409,57 +442,64 @@ const renderer = {
   }
 };
 
-// ===== LÓGICA PRINCIPAL DO JOGO =====
+// ===== LÓGICA DO JOGO =====
 const gameLogic = {
-  // Reseta o jogo
   reset() {
+    gameState.currentGridSize = preferences.gridSize;
+    gameState.tileCount = GAME_CONFIG.GRID_SIZES[gameState.currentGridSize].tiles;
+    
+    const center = Math.floor(gameState.tileCount / 2);
     gameState.snake = [
-      { x: 8, y: 10 },
-      { x: 7, y: 10 },
-      { x: 6, y: 10 }
+      { x: center, y: center },
+      { x: center - 1, y: center },
+      { x: center - 2, y: center }
     ];
+    
     gameState.direction = { x: 1, y: 0 };
     gameState.nextDirection = { x: 1, y: 0 };
-    gameState.startLength = gameState.snake.length;
     gameState.isGameOver = false;
     gameState.isPaused = false;
-    gameState.level = 1;
     gameState.particles = [];
-    gameState.speedTweenStart = 0;
-    
-    // Resetar velocidade
-    const initialInterval = GAME_CONFIG.SPEED_PRESETS[preferences.initialSpeed];
-    gameState.currentInterval = initialInterval;
-    gameState.targetInterval = initialInterval;
     
     this.placeFood();
     scoring.reset();
-    speedSystem.updateSpeedIndicator();
+    scoring.init();
+    this.setupCanvas();
   },
   
-  // Coloca comida aleatoriamente
+  setupCanvas() {
+    const container = elements.canvas.parentElement;
+    const maxSize = Math.min(container.clientWidth - 24, 520);
+    const dpr = window.devicePixelRatio || 1;
+    
+    elements.canvas.style.width = maxSize + 'px';
+    elements.canvas.style.height = maxSize + 'px';
+    elements.canvas.width = Math.floor(maxSize * dpr);
+    elements.canvas.height = Math.floor(maxSize * dpr);
+    elements.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    
+    renderer.render();
+  },
+  
   placeFood() {
     let newX, newY;
     do {
-      newX = Math.floor(Math.random() * GAME_CONFIG.TILE_COUNT);
-      newY = Math.floor(Math.random() * GAME_CONFIG.TILE_COUNT);
+      newX = Math.floor(Math.random() * gameState.tileCount);
+      newY = Math.floor(Math.random() * gameState.tileCount);
     } while (gameState.snake.some(segment => segment.x === newX && segment.y === newY));
     
     gameState.food = { x: newX, y: newY };
   },
   
-  // Atualiza lógica do jogo
   update() {
     if (!gameState.isRunning || gameState.isGameOver || gameState.isPaused) return;
     
-    // Atualizar direção
     gameState.direction = { ...gameState.nextDirection };
     
-    // Calcular próxima posição da cabeça
     const head = gameState.snake[0];
     const newHead = {
-      x: (head.x + gameState.direction.x + GAME_CONFIG.TILE_COUNT) % GAME_CONFIG.TILE_COUNT,
-      y: (head.y + gameState.direction.y + GAME_CONFIG.TILE_COUNT) % GAME_CONFIG.TILE_COUNT
+      x: (head.x + gameState.direction.x + gameState.tileCount) % gameState.tileCount,
+      y: (head.y + gameState.direction.y + gameState.tileCount) % gameState.tileCount
     };
     
     // Verificar auto-colisão
@@ -468,13 +508,16 @@ const gameLogic = {
       return;
     }
     
-    // Adicionar nova cabeça
     gameState.snake.unshift(newHead);
     
     // Verificar se comeu comida
     if (newHead.x === gameState.food.x && newHead.y === gameState.food.y) {
-      scoring.update(10);
+      const isNewRecord = scoring.update(10);
       soundSystem.eat();
+      
+      if (isNewRecord) {
+        soundSystem.record();
+      }
       
       // Criar partículas
       const cellSize = renderer.getCellSize();
@@ -484,31 +527,61 @@ const gameLogic = {
       );
       
       this.placeFood();
-      speedSystem.updateSpeed(gameState.snake.length);
     } else {
-      // Remover cauda se não comeu
       gameState.snake.pop();
     }
     
-    // Atualizar partículas
     particleSystem.update();
   },
   
-  // Game over
   gameOver() {
     gameState.isRunning = false;
     gameState.isGameOver = true;
+    
+    const currentHigh = scoring.getHighScore(gameState.currentGridSize);
+    const isNewRecord = scoring.current > currentHigh;
+    
     elements.finalScore.textContent = scoring.current.toString();
+    
+    // Atualizar título do game over
+    let gameOverTitle = elements.gameOver.querySelector('h2');
+    if (gameOverTitle) {
+      if (isNewRecord && scoring.current > 0) {
+        gameOverTitle.innerHTML = '🎉 NOVO RECORDE! 🎉<br>Game Over';
+        gameOverTitle.style.color = '#ffd700';
+        gameOverTitle.style.textShadow = '0 0 10px rgba(255, 215, 0, 0.5)';
+      } else {
+        gameOverTitle.textContent = 'Game Over';
+        gameOverTitle.style.color = '';
+        gameOverTitle.style.textShadow = '';
+      }
+    }
+    
+    // Mostrar informações de recorde
+    let recordInfo = elements.gameOver.querySelector('.record-info');
+    if (!recordInfo) {
+      recordInfo = document.createElement('div');
+      recordInfo.className = 'record-info';
+      elements.gameOver.insertBefore(recordInfo, elements.gameOver.querySelector('.game-over-buttons'));
+    }
+    
+    const gridName = GAME_CONFIG.GRID_SIZES[gameState.currentGridSize].name;
+    recordInfo.innerHTML = `
+      <p>Recorde (${gridName}): <strong>${Math.max(scoring.current, currentHigh)}</strong></p>
+      ${isNewRecord ? '<p style="color: #ffd700;">🏆 Parabéns pelo novo recorde! 🏆</p>' : ''}
+    `;
+    
     elements.gameOver.classList.remove('hidden');
     elements.pauseBtn.classList.add('hidden');
     elements.startBtn.classList.remove('hidden');
+    if (elements.homeBtn) elements.homeBtn.classList.add('hidden');
+    
     soundSystem.gameOver();
   }
 };
 
 // ===== SISTEMA DE CONTROLES =====
 const controls = {
-  // Mapa de direções
   directionMap: {
     up: { x: 0, y: -1 },
     down: { x: 0, y: 1 },
@@ -516,465 +589,320 @@ const controls = {
     right: { x: 1, y: 0 }
   },
   
-  // Últimas direções para debounce
-  lastDirection: null,
   lastDirectionTime: 0,
   
-  // Define nova direção com validação
   setDirection(newDirection) {
+    if (this.isModalOpen()) return;
+    if (!gameState.isRunning || gameState.isGameOver || gameState.isPaused) return;
+    
     const now = Date.now();
+    if (now - this.lastDirectionTime < 50) return;
     
-    // Debounce: evitar mudanças muito rápidas
-    if (now - this.lastDirectionTime < 100) return;
-    
-    // Evitar reversão direta
     const current = gameState.direction;
-    if (gameState.snake.length > 1 &&
-        newDirection.x === -current.x && newDirection.y === -current.y) {
-      return;
-    }
+    const opposite = { x: -current.x, y: -current.y };
+    
+    if (newDirection.x === opposite.x && newDirection.y === opposite.y) return;
     
     gameState.nextDirection = newDirection;
-    this.lastDirection = newDirection;
     this.lastDirectionTime = now;
-    
-    // Auto-start se não estiver rodando
-    if (!gameState.isRunning && !gameState.isGameOver && !this.isModalOpen()) {
-      gameControls.start();
-    }
   },
   
-  // Verifica se modal está aberto
   isModalOpen() {
-    return elements.speedModal && !elements.speedModal.classList.contains('hidden');
+    return elements.gameModal && !elements.gameModal.classList.contains('hidden');
   },
   
-  // Configurar controles de teclado
   setupKeyboard() {
-    window.addEventListener('keydown', (e) => {
-      const key = e.key.toLowerCase();
+    document.addEventListener('keydown', (e) => {
+      if (this.isModalOpen()) return;
       
-      // Direções
-      if (key === 'arrowup' || key === 'w') {
-        this.setDirection(this.directionMap.up);
-        e.preventDefault();
-      } else if (key === 'arrowdown' || key === 's') {
-        this.setDirection(this.directionMap.down);
-        e.preventDefault();
-      } else if (key === 'arrowleft' || key === 'a') {
-        this.setDirection(this.directionMap.left);
-        e.preventDefault();
-      } else if (key === 'arrowright' || key === 'd') {
-        this.setDirection(this.directionMap.right);
-        e.preventDefault();
-      }
-      
-      // Controles do jogo
-      if (key === ' ' || key === 'enter') {
-        if (this.isModalOpen()) return;
-        
-        if (gameState.isRunning) {
-          gameControls.pause();
-        } else {
-          gameControls.start();
-        }
-        e.preventDefault();
-      }
-      
-      // Escape para voltar ao menu
-      if (key === 'escape') {
-        gameControls.home();
-        e.preventDefault();
+      switch (e.code) {
+        case 'ArrowUp':
+        case 'KeyW':
+          e.preventDefault();
+          this.setDirection(this.directionMap.up);
+          break;
+        case 'ArrowDown':
+        case 'KeyS':
+          e.preventDefault();
+          this.setDirection(this.directionMap.down);
+          break;
+        case 'ArrowLeft':
+        case 'KeyA':
+          e.preventDefault();
+          this.setDirection(this.directionMap.left);
+          break;
+        case 'ArrowRight':
+        case 'KeyD':
+          e.preventDefault();
+          this.setDirection(this.directionMap.right);
+          break;
+        case 'Space':
+          e.preventDefault();
+          if (gameState.isRunning && !gameState.isGameOver) {
+            gameControls.pause();
+          } else if (!gameState.isGameOver) {
+            gameControls.start();
+          }
+          break;
+        case 'Escape':
+          e.preventDefault();
+          if (gameState.isRunning) gameControls.home();
+          break;
       }
     });
   },
   
-  // Configurar controles touch
   setupTouch() {
-    // Botões direcionais
-    document.querySelectorAll('.touch-btn').forEach(btn => {
-      const direction = btn.getAttribute('data-direction');
-      if (!direction || !this.directionMap[direction]) return;
-      
-      btn.addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        this.setDirection(this.directionMap[direction]);
-        btn.classList.add('active');
-      }, { passive: false });
-      
-      btn.addEventListener('touchend', (e) => {
-        e.preventDefault();
-        btn.classList.remove('active');
-      }, { passive: false });
-      
-      // Acessibilidade
-      btn.setAttribute('role', 'button');
-      btn.setAttribute('aria-label', `Mover ${direction === 'up' ? 'para cima' : 
-                                                direction === 'down' ? 'para baixo' :
-                                                direction === 'left' ? 'para esquerda' : 'para direita'}`);
-    });
-    
-    // Swipe no canvas
     this.setupSwipe();
   },
   
-  // Sistema de swipe
   setupSwipe() {
-    let touchStart = null;
-    const minDistance = 30;
-    const maxTime = 500;
+    let touchStartX = 0;
+    let touchStartY = 0;
+    const minSwipeDistance = 30;
     
     elements.canvas.addEventListener('touchstart', (e) => {
-      if (e.touches.length !== 1) return;
-      
-      touchStart = {
-        x: e.touches[0].clientX,
-        y: e.touches[0].clientY,
-        time: Date.now()
-      };
-    }, { passive: true });
+      e.preventDefault();
+      const touch = e.touches[0];
+      touchStartX = touch.clientX;
+      touchStartY = touch.clientY;
+    });
     
     elements.canvas.addEventListener('touchmove', (e) => {
-      e.preventDefault(); // Evitar scroll
-    }, { passive: false });
+      e.preventDefault();
+    });
     
     elements.canvas.addEventListener('touchend', (e) => {
-      if (!touchStart || e.changedTouches.length !== 1) return;
+      e.preventDefault();
+      if (this.isModalOpen()) return;
       
-      const touchEnd = {
-        x: e.changedTouches[0].clientX,
-        y: e.changedTouches[0].clientY,
-        time: Date.now()
-      };
+      const touch = e.changedTouches[0];
+      const deltaX = touch.clientX - touchStartX;
+      const deltaY = touch.clientY - touchStartY;
       
-      const dx = touchEnd.x - touchStart.x;
-      const dy = touchEnd.y - touchStart.y;
-      const dt = touchEnd.time - touchStart.time;
-      
-      if (dt > maxTime) return;
-      
-      const distance = Math.sqrt(dx * dx + dy * dy);
-      if (distance < minDistance) return;
-      
-      // Determinar direção
-      let direction;
-      if (Math.abs(dx) > Math.abs(dy)) {
-        direction = dx > 0 ? this.directionMap.right : this.directionMap.left;
-      } else {
-        direction = dy > 0 ? this.directionMap.down : this.directionMap.up;
+      if (Math.abs(deltaX) < minSwipeDistance && Math.abs(deltaY) < minSwipeDistance) {
+        return;
       }
       
-      this.setDirection(direction);
-    }, { passive: false });
+      if (Math.abs(deltaX) > Math.abs(deltaY)) {
+        this.setDirection(deltaX > 0 ? this.directionMap.right : this.directionMap.left);
+      } else {
+        this.setDirection(deltaY > 0 ? this.directionMap.down : this.directionMap.up);
+      }
+    });
   }
 };
 
 // ===== CONTROLES DO JOGO =====
 const gameControls = {
   start() {
-    if (gameState.isRunning || controls.isModalOpen()) return;
-    
-    if (gameState.isGameOver) {
-      elements.gameOver.classList.add('hidden');
-      gameLogic.reset();
-    }
+    if (controls.isModalOpen()) return;
     
     gameState.isRunning = true;
     gameState.isPaused = false;
+    gameState.isGameOver = false;
+    
     elements.startBtn.classList.add('hidden');
     elements.pauseBtn.classList.remove('hidden');
     elements.pauseBtn.textContent = 'Pausar';
-    elements.pauseBtn.setAttribute('aria-label', 'Pausar jogo');
-    
-    if (elements.homeBtn) {
-      elements.homeBtn.classList.remove('hidden');
-    }
+    if (elements.homeBtn) elements.homeBtn.classList.remove('hidden');
+    elements.gameOver.classList.add('hidden');
   },
   
   pause() {
-    if (!gameState.isRunning) return;
+    if (!gameState.isRunning || gameState.isGameOver) return;
     
     gameState.isPaused = !gameState.isPaused;
-    
-    if (gameState.isPaused) {
-      elements.pauseBtn.textContent = 'Retomar';
-      elements.pauseBtn.setAttribute('aria-label', 'Retomar jogo');
-    } else {
-      elements.pauseBtn.textContent = 'Pausar';
-      elements.pauseBtn.setAttribute('aria-label', 'Pausar jogo');
-    }
+    elements.pauseBtn.textContent = gameState.isPaused ? 'Continuar' : 'Pausar';
   },
   
   restart() {
-    gameLogic.reset();
-    this.start();
+    if (confirm('Tem certeza? Tudo será perdido.')) {
+      gameLogic.reset();
+      this.start();
+    }
   },
   
   home() {
-    // Se o jogo estava rodando, marcar para retomar depois do menu
+    gameState.isPaused = true;
     gameState.wasRunningBeforeMenu = gameState.isRunning && !gameState.isGameOver;
-    
-    // Pausar logicamente durante o menu
-    if (gameState.wasRunningBeforeMenu) {
-      gameState.isPaused = true;
-      // manter isRunning true para indicar que é uma sessão ativa pausada
-    } else {
-      gameState.isRunning = false;
-      gameState.isPaused = false;
-    }
-    
-    // Atualizar UI de botões: esconder Start, mostrar Pause e Menu
-    elements.startBtn.classList.add('hidden');
-    elements.pauseBtn.classList.remove('hidden');
-    elements.pauseBtn.textContent = 'Retomar';
-    elements.pauseBtn.setAttribute('aria-label', 'Retomar jogo');
-    if (elements.homeBtn) elements.homeBtn.classList.remove('hidden');
-    
-    // Ocultar Game Over se visível
-    elements.gameOver.classList.add('hidden');
-    
-    // Mostrar modal com texto apropriado
     modalSystem.show();
+  },
+  
+  newGame() {
+    if (confirm('Tem certeza? Tudo será perdido.')) {
+      gameState.wasRunningBeforeMenu = false;
+      gameLogic.reset();
+      modalSystem.show();
+    }
   }
 };
 
 // ===== SISTEMA DE UI =====
 const uiSystem = {
-  // Criar elementos adicionais da UI
   createElements() {
-    // Botão Home/Voltar
-    elements.homeBtn = document.createElement('button');
-    elements.homeBtn.textContent = 'Menu';
-    elements.homeBtn.className = 'restart-btn hidden';
-    elements.homeBtn.setAttribute('aria-label', 'Voltar ao menu inicial');
-    elements.homeBtn.addEventListener('click', gameControls.home);
-    
-    // Adicionar ao grupo de botões (se existir)
-    const buttonGroup = document.querySelector('.button-group');
-    if (buttonGroup) {
-      buttonGroup.appendChild(elements.homeBtn);
-    }
-    
-    // Indicadores de velocidade e nível
-    elements.speedIndicator = document.createElement('div');
-    elements.speedIndicator.className = 'speed-indicator';
-    const speedName = preferences.initialSpeed.charAt(0).toUpperCase() + preferences.initialSpeed.slice(1);
-    elements.speedIndicator.textContent = `Velocidade: ${speedName} • Nível: 1`;
-    
-    const gameInfo = document.querySelector('.game-info');
-    if (gameInfo) {
-      gameInfo.appendChild(elements.speedIndicator);
-    }
-  },
-  
-  // Melhorar acessibilidade
-  improveAccessibility() {
-    // Adicionar ARIA labels
-    elements.startBtn.setAttribute('aria-label', 'Iniciar jogo');
-    elements.pauseBtn.setAttribute('aria-label', 'Pausar jogo');
-    elements.restartBtn.setAttribute('aria-label', 'Reiniciar jogo');
-    elements.canvas.setAttribute('role', 'game');
-    elements.canvas.setAttribute('aria-label', 'Área do jogo Snake');
-    
-    // Melhorar modal
-    elements.speedModal.setAttribute('role', 'dialog');
-    elements.speedModal.setAttribute('aria-modal', 'true');
-    elements.speedModal.setAttribute('aria-labelledby', 'modal-title');
-    
-    // Adicionar ID ao título do modal
-    const modalTitle = elements.speedModal.querySelector('h2');
-    if (modalTitle) {
-      modalTitle.id = 'modal-title';
-    }
-    
-    // Focus trap no modal
-    this.setupFocusTrap();
-  },
-  
-  // Sistema de focus trap para modal
-  setupFocusTrap() {
-    const modal = elements.speedModal;
-    const focusableElements = modal.querySelectorAll(
-      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-    );
-    
-    if (focusableElements.length === 0) return;
-    
-    const firstElement = focusableElements[0];
-    const lastElement = focusableElements[focusableElements.length - 1];
-    
-    modal.addEventListener('keydown', (e) => {
-      if (e.key !== 'Tab') return;
+    // Botão Home (Menu)
+    if (!elements.homeBtn) {
+      elements.homeBtn = document.createElement('button');
+      elements.homeBtn.textContent = 'Menu';
+      elements.homeBtn.className = 'game-btn secondary';
+      elements.homeBtn.addEventListener('click', gameControls.home);
       
-      if (e.shiftKey) {
-        if (document.activeElement === firstElement) {
-          lastElement.focus();
-          e.preventDefault();
-        }
-      } else {
-        if (document.activeElement === lastElement) {
-          firstElement.focus();
-          e.preventDefault();
-        }
+      const controls = document.querySelector('.game-controls');
+      if (controls && elements.pauseBtn) {
+        controls.insertBefore(elements.homeBtn, elements.pauseBtn.nextSibling);
       }
-    });
+    }
   },
   
-  // Responsividade do canvas
   setupResponsiveCanvas() {
     const resizeCanvas = () => {
-      const container = elements.canvas.parentElement;
-      const size = Math.min(container.clientWidth, 520);
-      const dpr = window.devicePixelRatio || 1;
-      
-      elements.canvas.style.width = size + 'px';
-      elements.canvas.style.height = size + 'px';
-      elements.canvas.width = Math.floor(size * dpr);
-      elements.canvas.height = Math.floor(size * dpr);
-      elements.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      
-      renderer.render();
+      if (gameState.isRunning) {
+        gameLogic.setupCanvas();
+      }
     };
     
     window.addEventListener('resize', resizeCanvas);
-    resizeCanvas();
+    gameLogic.setupCanvas();
   }
 };
 
 // ===== SISTEMA DE MODAL =====
 const modalSystem = {
   setup() {
-    elements.confirmSpeedBtn.addEventListener('click', () => {
-      const selectedSpeed = document.querySelector('input[name="speed"]:checked')?.value || 'normal';
-      
-      // Sempre persistir preferência, independente de retomar ou novo jogo
-      preferences.initialSpeed = selectedSpeed;
-      preferences.save();
-      
-      if (gameState.wasRunningBeforeMenu && gameState.isRunning && gameState.isPaused && !gameState.isGameOver) {
-        // Caso de Retomar: não alterar a velocidade/intervalos atuais
-        elements.speedModal.classList.add('hidden');
-        gameState.isPaused = false;
-        gameState.wasRunningBeforeMenu = false;
-        
-        // Atualizar botões para estado em execução
-        elements.pauseBtn.classList.remove('hidden');
-        elements.pauseBtn.textContent = 'Pausar';
-        elements.pauseBtn.setAttribute('aria-label', 'Pausar jogo');
-        if (elements.homeBtn) elements.homeBtn.classList.remove('hidden');
-        elements.startBtn.classList.add('hidden');
-        
-        return;
-      }
-      
-      // Caso de nova sessão (inicial ou após game over): preparar velocidade inicial
-      const initialInterval = GAME_CONFIG.SPEED_PRESETS[selectedSpeed];
-      gameState.currentInterval = initialInterval;
-      gameState.targetInterval = initialInterval;
-      
-      // Fechar modal e focar botão Start
-      elements.speedModal.classList.add('hidden');
-      elements.startBtn.focus();
-      
-      speedSystem.updateSpeedIndicator();
+    elements.confirmBtn.addEventListener('click', () => {
+      this.handleConfirm();
     });
     
-    // Configurar seleção de velocidade baseada nas preferências
-    this.updateSpeedSelection();
+    elements.newGameBtn.addEventListener('click', () => {
+      gameControls.newGame();
+    });
+    
+    this.updateGridSelection();
+    scoring.updateModalHighScores();
   },
   
-  updateSpeedSelection() {
-    const speedRadio = document.querySelector(`input[name="speed"][value="${preferences.initialSpeed}"]`);
-    if (speedRadio) {
-      speedRadio.checked = true;
+  handleConfirm() {
+    // Ler preferências
+    const selectedGrid = document.querySelector('input[name="gridSize"]:checked')?.value || 'large';
+    const showGrid = document.querySelector('input[name="showGrid"]').checked;
+    const soundOn = document.querySelector('input[name="soundOn"]').checked;
+    const showParticles = document.querySelector('input[name="showParticles"]').checked;
+    
+    preferences.gridSize = selectedGrid;
+    preferences.showGrid = showGrid;
+    preferences.soundOn = soundOn;
+    preferences.showParticles = showParticles;
+    preferences.save();
+    
+    elements.gameModal.classList.add('hidden');
+    
+    if (gameState.wasRunningBeforeMenu && gameState.isRunning && !gameState.isGameOver) {
+      gameState.isPaused = false;
+      gameState.wasRunningBeforeMenu = false;
+      
+      elements.pauseBtn.classList.remove('hidden');
+      elements.pauseBtn.textContent = 'Pausar';
+      if (elements.homeBtn) elements.homeBtn.classList.remove('hidden');
+      elements.startBtn.classList.add('hidden');
+    } else {
+      gameLogic.reset();
+      elements.startBtn.focus();
     }
+  },
+  
+  setupPreferences() {
+    document.querySelector('input[name="showGrid"]').checked = preferences.showGrid;
+    document.querySelector('input[name="soundOn"]').checked = preferences.soundOn;
+    document.querySelector('input[name="showParticles"]').checked = preferences.showParticles;
+  },
+  
+  updateGridSelection() {
+    const gridRadio = document.querySelector(`input[name="gridSize"][value="${preferences.gridSize}"]`);
+    if (gridRadio) {
+      gridRadio.checked = true;
+    }
+    
+    const gridInputs = document.querySelectorAll('input[name="gridSize"]');
+    const isResuming = gameState.wasRunningBeforeMenu && !gameState.isGameOver;
+    
+    gridInputs.forEach(input => {
+      input.disabled = isResuming;
+      input.parentElement.style.opacity = isResuming ? '0.5' : '1';
+    });
   },
   
   show() {
-    // Definir texto do botão conforme contexto (retomar ou começar)
-    if (gameState.wasRunningBeforeMenu && !gameState.isGameOver) {
-      elements.confirmSpeedBtn.textContent = 'Retomar';
-    } else {
-      elements.confirmSpeedBtn.textContent = 'Começar';
+    const isResuming = gameState.wasRunningBeforeMenu && !gameState.isGameOver;
+    
+    elements.confirmBtn.textContent = isResuming ? 'Retomar' : 'Começar';
+    elements.newGameBtn.style.display = isResuming ? 'block' : 'none';
+    
+    // Atualizar título do modal
+    const modalTitle = elements.gameModal.querySelector('#modal-title');
+    if (modalTitle) {
+      modalTitle.textContent = isResuming ? 'Menu' : 'Snake';
     }
     
-    elements.speedModal.classList.remove('hidden');
-    this.updateSpeedSelection();
+    this.updateGridSelection();
+    this.setupPreferences();
+    scoring.updateModalHighScores();
     
-    const firstInput = elements.speedModal.querySelector('input[type="radio"]:checked') ||
-                      elements.speedModal.querySelector('input[type="radio"]');
-    if (firstInput) firstInput.focus();
+    elements.gameModal.classList.remove('hidden');
+    
+    const firstInput = elements.gameModal.querySelector('input[type="radio"]:checked') ||
+                      elements.gameModal.querySelector('input[type="radio"]');
+    if (firstInput && !firstInput.disabled) firstInput.focus();
   }
 };
 
-// ===== LOOP PRINCIPAL COM REQUESTANIMATIONFRAME =====
+// ===== LOOP PRINCIPAL =====
 let animationId = null;
 
 function gameLoop(currentTime) {
   animationId = requestAnimationFrame(gameLoop);
   
-  // Calcular delta time
   const deltaTime = currentTime - gameState.lastFrameTime;
   gameState.lastFrameTime = currentTime;
   
-  // Tween de velocidade
-  speedSystem.tweenSpeed(currentTime);
-  
-  // Acumular tempo para ticks do jogo
   gameState.accumulator += deltaTime;
   
-  // Executar ticks baseado no intervalo atual
-  while (gameState.accumulator >= gameState.currentInterval) {
+  while (gameState.accumulator >= GAME_CONFIG.GAME_SPEED) {
     gameLogic.update();
-    gameState.accumulator -= gameState.currentInterval;
+    gameState.accumulator -= GAME_CONFIG.GAME_SPEED;
   }
   
-  // Sempre renderizar
   renderer.render();
 }
 
 // ===== INICIALIZAÇÃO =====
 function init() {
-  // Configurar elementos DOM
   elements.ctx = elements.canvas.getContext('2d');
   
-  // Carregar preferências
   preferences.load();
-  
-  // Inicializar sistemas
   soundSystem.init();
   scoring.init();
   
-  // Configurar UI
   uiSystem.createElements();
-  uiSystem.improveAccessibility();
   uiSystem.setupResponsiveCanvas();
   
-  // Configurar controles
   controls.setupKeyboard();
   controls.setupTouch();
   
-  // Configurar modal
   modalSystem.setup();
   
-  // Configurar botões
+  // Event listeners
   elements.startBtn.addEventListener('click', gameControls.start);
   elements.pauseBtn.addEventListener('click', gameControls.pause);
   elements.restartBtn.addEventListener('click', gameControls.restart);
   
-  // Estado inicial
   gameLogic.reset();
-  speedSystem.updateSpeedIndicator();
-  
-  // Mostrar modal inicial
   modalSystem.show();
   
-  // Iniciar loop
   gameState.lastFrameTime = performance.now();
   gameLoop(gameState.lastFrameTime);
 }
 
-// ===== INICIAR QUANDO DOM ESTIVER PRONTO =====
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', init);
 } else {
