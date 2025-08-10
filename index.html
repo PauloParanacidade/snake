@@ -27,11 +27,26 @@
         
         <div class="game-controls">
             <div class="control-instructions">
-                <p>Use arrow keys or WASD to control the snake</p>
+                <p class="desktop-only">Use arrow keys or WASD to control the snake</p>
+                <p class="mobile-only">Tap the direction buttons to control the snake</p>
                 <p>Eat the red food to grow and increase your score</p>
             </div>
-            <button id="startBtn" class="start-btn">Start Game</button>
-            <button id="pauseBtn" class="pause-btn hidden">Pause</button>
+            <div class="button-group">
+                <button id="startBtn" class="start-btn">Start Game</button>
+                <button id="pauseBtn" class="pause-btn hidden">Pause</button>
+            </div>
+        </div>
+        
+        <!-- Touch Controls for Mobile -->
+        <div class="touch-controls">
+            <div class="touch-row">
+                <button class="touch-btn" data-direction="up">↑</button>
+            </div>
+            <div class="touch-row">
+                <button class="touch-btn" data-direction="left">←</button>
+                <button class="touch-btn" data-direction="down">↓</button>
+                <button class="touch-btn" data-direction="right">→</button>
+            </div>
         </div>
     </div>
     

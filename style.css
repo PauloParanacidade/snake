@@ -109,14 +109,60 @@ body {
   color: #c7d2fe;
 }
 
+/* Responsivo para o canvas e layout */
+#gameCanvas {
+  width: 100%;
+  height: auto;
+  max-width: 480px;
+  aspect-ratio: 1 / 1; /* mantém quadrado */
+  image-rendering: pixelated;
+}
+
+.game-area {
+  width: 100%;
+}
+
+/* Esconder/mostrar instruções conforme dispositivo */
+.desktop-only { display: block; }
+.mobile-only { display: none; }
+
+/* Agrupamento de botões */
+.button-group { display: flex; gap: 8px; align-items: center; }
+
+/* Controles touch (apenas em telas pequenas) */
+.touch-controls { display: none; margin-top: 12px; }
+.touch-row { display: flex; justify-content: center; gap: 12px; }
+.touch-btn {
+  font-size: 22px;
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  cursor: pointer;
+}
+.touch-btn:active { filter: brightness(1.2); }
+
+/* Melhorias para mobile */
 @media (max-width: 520px) {
+  .game-container { padding: 14px; }
+  .game-header h1 { font-size: 22px; }
+  .control-instructions { font-size: 13px; }
+
+  .desktop-only { display: none; }
+  .mobile-only { display: block; }
+
+  .touch-controls { display: block; }
+
+  /* Ajustar infos para caber melhor */
+  .game-info { width: 100%; justify-content: space-between; }
+
+  /* Botões maiores para toque */
+  .start-btn, .pause-btn, .restart-btn { padding: 12px 18px; font-size: 16px; }
+  
   .game-controls {
     flex-direction: column;
     align-items: stretch;
-  }
-
-  .game-info {
-    width: 100%;
-    justify-content: space-between;
   }
 }
