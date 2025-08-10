@@ -12,6 +12,7 @@ let food = { x: 10, y: 10 };
 let score = 0;
 let highScore = parseInt(localStorage.getItem('snakeHighScore') || '0', 10);
 let speed = 120; // ms per frame
+let initialSpeed = 120; // velocidade escolhida pelo usuário
 let gameInterval = null;
 let isRunning = false;
 let isGameOver = false;
@@ -23,6 +24,10 @@ const gameOverEl = document.getElementById('gameOver');
 const startBtn = document.getElementById('startBtn');
 const pauseBtn = document.getElementById('pauseBtn');
 const restartBtn = document.getElementById('restartBtn');
+
+// Modal de velocidade
+const speedModal = document.getElementById('speedModal');
+const confirmSpeedBtn = document.getElementById('confirmSpeedBtn');
 
 highScoreEl.textContent = highScore.toString();
 
@@ -36,7 +41,8 @@ function resetGame() {
   nextDir = { x: 1, y: 0 };
   placeFood();
   score = 0;
-  speed = 120;
+  // respeita a velocidade inicial escolhida
+  speed = initialSpeed;
   isGameOver = false;
   updateScore(0);
 }
@@ -63,6 +69,10 @@ function placeFood() {
 
 function startGame() {
   if (isRunning) return;
+  // se o modal ainda está aberto, não iniciar até confirmar
+  if (speedModal && !speedModal.classList.contains('hidden')) {
+    return;
+  }
   if (isGameOver) {
     gameOverEl.classList.add('hidden');
     resetGame();
@@ -118,8 +128,9 @@ function gameLoop() {
   if (newHead.x === food.x && newHead.y === food.y) {
     updateScore(10);
     placeFood();
-    // Increase speed slightly (cap minimum interval)
-    speed = Math.max(60, speed - 3);
+    // Acelera um pouco (respeitando limite mínimo baseado na escolha inicial)
+    const minInterval = Math.min(60, Math.max(50, initialSpeed - 70)); // limites razoáveis
+    speed = Math.max(minInterval, speed - 3);
     clearInterval(gameInterval);
     gameInterval = setInterval(gameLoop, speed);
   } else {
@@ -212,9 +223,39 @@ restartBtn.addEventListener('click', () => {
 });
 pauseBtn.addEventListener('click', pauseGame);
 
-// Initialize
+// Initialize: mostrar modal de velocidade e aguardar escolha
 resetGame();
 draw();
+
+// Abrir modal inicialmente
+if (speedModal) {
+  speedModal.classList.remove('hidden');
+}
+
+function mapSpeed(value) {
+  // lento, normal, rápido -> intervalos em ms
+  switch (value) {
+    case 'fast': return 100;
+    case 'normal': return 250;
+    case 'slow':
+    default: return 500;
+  }
+}
+
+if (confirmSpeedBtn) {
+  confirmSpeedBtn.addEventListener('click', () => {
+    const selected = (document.querySelector('input[name="speed"]:checked') || { value: 'slow' }).value;
+    initialSpeed = mapSpeed(selected);
+    speed = initialSpeed;
+    // fechar modal
+    speedModal.classList.add('hidden');
+    // opcional: iniciar automaticamente
+    // startGame();
+    // dar foco ao botão Start para indicar próximo passo
+    if (startBtn) startBtn.focus();
+  });
+}
+
 
 // Responsividade do canvas e DPR
 function resizeCanvas() {
