@@ -19,10 +19,9 @@
           <div class="score-board">
             <span>Pontos: <strong id="score">0</strong></span>
             <span>Recorde: <strong id="highScore">0</strong></span>
-            <span>Velocidade: <strong id="speedLevel">1 de 10</strong></span>
+            <span>Velocidade: <strong id="speedLevel">1 de 20</strong></span>
           </div>
           <div class="game-controls">
-            <button id="startBtn" class="game-btn">Iniciar</button>
             <button id="pauseBtn" class="game-btn hidden">Pausar</button>
             <button id="restartBtn" class="game-btn">Reiniciar</button>
           </div>
@@ -83,16 +82,26 @@
       <div class="record-info" id="recordInfo"></div>
       <div class="modal-actions">
         <button id="resumeFromOver" class="game-btn">Jogar de novo</button>
+        <button id="menuFromOver" class="game-btn secondary">Menu</button>
       </div>
     </div>
   </div>
 
   <script src="script.js"></script>
   <script>
-    // Ligar botão "Jogar de novo" para abrir modal
+    // Botões do modal de Game Over
     document.addEventListener('DOMContentLoaded', () => {
       const resumeBtn = document.getElementById('resumeFromOver');
+      const menuBtn = document.getElementById('menuFromOver');
       resumeBtn.addEventListener('click', () => {
+        document.getElementById('gameOverModal').classList.add('hidden');
+        // Reiniciar jogo diretamente mantendo preferências atuais
+        gameState.wasRunningBeforeMenu = false;
+        gameState.isFromGameOver = false;
+        gameLogic.reset();
+        gameControls.start();
+      });
+      menuBtn.addEventListener('click', () => {
         document.getElementById('gameOverModal').classList.add('hidden');
         gameState.wasRunningBeforeMenu = false;
         gameState.isFromGameOver = true;

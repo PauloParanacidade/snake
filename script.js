@@ -9,9 +9,9 @@ const GAME_CONFIG = {
     medium: { tiles: 20, name: 'Médio' },
     large: { tiles: 30, name: 'Grande' }
   },
-  BASE_SPEED: 400,
+  BASE_SPEED: 600,
   MIN_SPEED: 80,
-  MAX_LEVEL: 10,
+  MAX_LEVEL: 20,
   PARTICLE_COUNT: 10
 };
 
@@ -77,7 +77,6 @@ const elements = {
   gameOverTitle: document.getElementById('gameOverTitle'),
   recordInfo: document.getElementById('recordInfo'),
   
-  startBtn: document.getElementById('startBtn'),
   pauseBtn: document.getElementById('pauseBtn'),
   restartBtn: document.getElementById('restartBtn'),
   homeBtn: null,
@@ -132,7 +131,7 @@ const scoring = {
     gameState.currentLevel = 1;
     gameState.currentSpeed = GAME_CONFIG.BASE_SPEED;
     elements.score.textContent = '0';
-    elements.speedLevel.textContent = '1 de ' + GAME_CONFIG.MAX_LEVEL;
+    elements.speedLevel.textContent = `1 de ${GAME_CONFIG.MAX_LEVEL}`;
   },
   
   init() {
@@ -560,35 +559,43 @@ const gameLogic = {
     gameState.isGameOver = true;
     gameState.isFromGameOver = true;
     
+    // Verificar recorde
     const currentHigh = scoring.getHighScore(gameState.currentGridSize);
     const isNewRecord = scoring.current > currentHigh;
-    
     elements.finalScore.textContent = scoring.current.toString();
     
-    // Atualizar título do game over
-    if (isNewRecord && scoring.current > 0) {
+    if (isNewRecord) {
+      scoring.setHighScore(gameState.currentGridSize, scoring.current);
+      elements.highScore.textContent = scoring.current.toString();
+      // Título com celebração, centralizado
       elements.gameOverTitle.innerHTML = '🎉 NOVO RECORDE! 🎉<br>Game Over';
       elements.gameOverTitle.style.color = '#ffd700';
       elements.gameOverTitle.style.textShadow = '0 0 10px rgba(255, 215, 0, 0.5)';
+      elements.gameOverTitle.classList.add('record-title');
+      // Info de recorde com pulso
+      elements.recordInfo.innerHTML = `
+        <div class="record-celebration">
+          Você superou o recorde anterior de <strong>${currentHigh}</strong> pontos!
+        </div>`;
+      soundSystem.record();
     } else {
+      // Resetar estilos
       elements.gameOverTitle.textContent = 'Game Over';
       elements.gameOverTitle.style.color = '';
       elements.gameOverTitle.style.textShadow = '';
+      elements.gameOverTitle.classList.remove('record-title');
+      elements.recordInfo.innerHTML = `
+        <div>
+          Seu melhor: <strong>${currentHigh}</strong>
+        </div>`;
+      soundSystem.gameOver();
     }
-    
-    // Mostrar informações de recorde
-    const gridName = GAME_CONFIG.GRID_SIZES[gameState.currentGridSize].name;
-    elements.recordInfo.innerHTML = `
-      <p>Recorde (${gridName}): <strong>${Math.max(scoring.current, currentHigh)}</strong></p>
-      ${isNewRecord ? '<p style="color: #ffd700;">🏆 Parabéns pelo novo recorde! 🏆</p>' : ''}
-    `;
-    
+
     elements.gameOverModal.classList.remove('hidden');
     elements.pauseBtn.classList.add('hidden');
-    elements.startBtn.classList.remove('hidden');
     if (elements.homeBtn) elements.homeBtn.classList.add('hidden');
     
-    soundSystem.gameOver();
+    // Removido som duplicado de game over (já tratado acima)
   }
 };
 
@@ -716,7 +723,6 @@ const gameControls = {
     gameState.isGameOver = false;
     gameState.isFromGameOver = false;
     
-    elements.startBtn.classList.add('hidden');
     elements.pauseBtn.classList.remove('hidden');
     elements.pauseBtn.textContent = 'Pausar';
     if (elements.homeBtn) elements.homeBtn.classList.remove('hidden');
@@ -819,10 +825,9 @@ const modalSystem = {
       elements.pauseBtn.classList.remove('hidden');
       elements.pauseBtn.textContent = 'Pausar';
       if (elements.homeBtn) elements.homeBtn.classList.remove('hidden');
-      elements.startBtn.classList.add('hidden');
     } else {
       gameLogic.reset();
-      elements.startBtn.focus();
+      gameControls.start();
     }
   },
   
@@ -852,15 +857,18 @@ const modalSystem = {
     const isFromGameOver = gameState.isFromGameOver;
     
     elements.confirmBtn.textContent = isResuming ? 'Retomar' : 'Começar';
-    elements.newGameBtn.style.display = 'block';
+    elements.newGameBtn.style.display = (isResuming && !isFromGameOver) ? 'block' : 'none';
     
     // Atualizar título do modal
     const modalTitle = elements.gameModal.querySelector('#modal-title');
+    const subtitle = elements.gameModal.querySelector('.subtitle');
     if (modalTitle) {
       if (isResuming && !isFromGameOver) {
         modalTitle.textContent = 'Snake';
+        if (subtitle) subtitle.textContent = 'Criado por Paulinho';
       } else {
         modalTitle.textContent = 'Bem-vindo(a) ao Snake!';
+        if (subtitle) subtitle.textContent = 'Criado por Paulinho';
       }
     }
     
@@ -912,7 +920,6 @@ function init() {
   modalSystem.setup();
   
   // Event listeners
-  elements.startBtn.addEventListener('click', gameControls.start);
   elements.pauseBtn.addEventListener('click', gameControls.pause);
   elements.restartBtn.addEventListener('click', gameControls.restart);
   

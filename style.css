@@ -64,6 +64,27 @@ canvas { width: 520px; height: 520px; background: #0a0f18; border-radius: 10px; 
 .toggle input[type="checkbox"] { accent-color: var(--accent); transform: scale(1.1); }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
 
+/* Animações para novo recorde */
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+@keyframes sparkle {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.1); }
+}
+
+.record-celebration {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.record-title {
+  animation: sparkle 1.5s ease-in-out infinite;
+  text-align: center;
+}
+
 /* Toques responsivos */
 @media (max-width: 640px) {
   canvas { width: 92vw; height: 92vw; }
